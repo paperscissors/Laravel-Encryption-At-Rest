@@ -120,6 +120,65 @@ class EncryptEmails extends Command
                         // Force email update to trigger encryption
                         $record->email = $originalEmail;
                         
+                        // Check if encrypted value would exceed database limit before saving
+                        $encryptionService = app()->make(\Paperscissorsandglue\EncryptionAtRest\EncryptionService::class);
+                        
+                        // Try standard encryption first
+                        $standardEncryptedEmail = $encryptionService->encrypt($originalEmail, false);
+                        
+                        if (strlen($standardEncryptedEmail) > 255 && DB::connection()->getDriverName() === 'pgsql') {
+                            // For PostgreSQL with strict character limits, try compact encryption
+                            $compactEncryptedEmail = $encryptionService->encrypt($originalEmail, true);
+                            
+                            if (strlen($compactEncryptedEmail) <= 255) {
+                                // Use compact encryption if it fits
+                                $this->line("Using compact encryption for email ID {$record->id} (reduced from " . 
+                                    strlen($standardEncryptedEmail) . " to " . strlen($compactEncryptedEmail) . " chars)");
+                                
+                                // Apply the compact encryption directly (no need to set email again since we're just using a different format)
+                                $record->attributes['email'] = $compactEncryptedEmail;
+                            } else {
+                                // Even compact encryption is too long
+                                $this->warn("Email for ID {$record->id} is too long even with compact encryption (" . 
+                                    strlen($compactEncryptedEmail) . " chars)");
+                                    
+                                // Options:
+                                // 1. Store a shortened email (last part omitted)
+                                // 2. Store just the email_index and a note
+                            
+                            if ($this->confirm("Would you like to store a truncated version of this email?", true)) {
+                                // Truncate email to fit in the database while keeping domain
+                                $parts = explode('@', $originalEmail);
+                                if (count($parts) === 2) {
+                                    $username = $parts[0];
+                                    $domain = $parts[1];
+                                    
+                                    // Keep shortening username until it fits
+                                    $maxTries = 10;
+                                    $tries = 0;
+                                    
+                                    while ($tries < $maxTries) {
+                                        $truncatedUsername = substr($username, 0, max(1, strlen($username) - $tries * 5));
+                                        $truncatedEmail = $truncatedUsername . '@' . $domain;
+                                        $encryptedTruncated = $encryptionService->encrypt($truncatedEmail);
+                                        
+                                        if (strlen($encryptedTruncated) <= 255) {
+                                            $record->email = $truncatedEmail;
+                                            $this->line("Email shortened from {$originalEmail} to {$truncatedEmail}");
+                                            break;
+                                        }
+                                        
+                                        $tries++;
+                                    }
+                                }
+                            } else {
+                                // Skip this record
+                                $this->info("Skipping encryption for email ID {$record->id}");
+                                DB::rollBack();
+                                continue;
+                            }
+                        }
+                        
                         $record->save();
                         DB::commit();
                         $count++;
