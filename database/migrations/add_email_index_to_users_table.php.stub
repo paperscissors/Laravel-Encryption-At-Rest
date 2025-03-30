@@ -3,6 +3,7 @@
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\DB;
 
 return new class extends Migration
 {
@@ -17,7 +18,29 @@ return new class extends Migration
             
             // Remove existing unique index on email since it will be encrypted
             try {
-                $table->dropUnique('users_email_unique');
+                // For PostgreSQL, we need to use dropIndex and proper index name conventions
+                if (DB::connection()->getDriverName() === 'pgsql') {
+                    // Check if the constraint exists
+                    $constraintExists = DB::select("SELECT 1 FROM pg_constraint 
+                        JOIN pg_class ON pg_constraint.conrelid = pg_class.oid 
+                        WHERE pg_class.relname = 'users' 
+                        AND pg_constraint.conname LIKE '%email%' 
+                        AND pg_constraint.contype = 'u'");
+                    
+                    if (!empty($constraintExists)) {
+                        // Get the actual constraint name
+                        $constraintName = DB::select("SELECT conname FROM pg_constraint 
+                            JOIN pg_class ON pg_constraint.conrelid = pg_class.oid 
+                            WHERE pg_class.relname = 'users' 
+                            AND pg_constraint.conname LIKE '%email%' 
+                            AND pg_constraint.contype = 'u'")[0]->conname;
+                        
+                        DB::statement("ALTER TABLE users DROP CONSTRAINT \"{$constraintName}\"");
+                    }
+                } else {
+                    // For MySQL and other drivers
+                    $table->dropUnique('users_email_unique');
+                }
             } catch (\Exception $e) {
                 // Ignore if the unique index doesn't exist
             }
@@ -34,7 +57,31 @@ return new class extends Migration
     {
         Schema::table('users', function (Blueprint $table) {
             // Remove the unique index on email_index
-            $table->dropUnique('users_email_index_unique');
+            try {
+                if (DB::connection()->getDriverName() === 'pgsql') {
+                    // Check if the constraint exists
+                    $constraintExists = DB::select("SELECT 1 FROM pg_constraint 
+                        JOIN pg_class ON pg_constraint.conrelid = pg_class.oid 
+                        WHERE pg_class.relname = 'users' 
+                        AND pg_constraint.conname LIKE '%email_index%' 
+                        AND pg_constraint.contype = 'u'");
+                    
+                    if (!empty($constraintExists)) {
+                        // Get the actual constraint name
+                        $constraintName = DB::select("SELECT conname FROM pg_constraint 
+                            JOIN pg_class ON pg_constraint.conrelid = pg_class.oid 
+                            WHERE pg_class.relname = 'users' 
+                            AND pg_constraint.conname LIKE '%email_index%' 
+                            AND pg_constraint.contype = 'u'")[0]->conname;
+                        
+                        DB::statement("ALTER TABLE users DROP CONSTRAINT \"{$constraintName}\"");
+                    }
+                } else {
+                    $table->dropUnique('users_email_index_unique');
+                }
+            } catch (\Exception $e) {
+                // Ignore if the unique index doesn't exist
+            }
             
             // Drop the email_index column
             $table->dropColumn('email_index');
