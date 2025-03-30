@@ -59,25 +59,27 @@ return new class extends Migration
             // Remove the unique index on email_index
             try {
                 if (DB::connection()->getDriverName() === 'pgsql') {
-                    // Check if the constraint exists
-                    $constraintExists = DB::select("SELECT 1 FROM pg_constraint 
-                        JOIN pg_class ON pg_constraint.conrelid = pg_class.oid 
-                        WHERE pg_class.relname = 'users' 
-                        AND pg_constraint.conname LIKE '%email_index%' 
+                    // This is where it tries to find any constraint that has 'email' in its name
+                    $constraintExists = DB::select("SELECT 1 FROM pg_constraint
+                        JOIN pg_class ON pg_constraint.conrelid = pg_class.oid
+                        WHERE pg_class.relname = 'users'
+                        AND pg_constraint.conname LIKE '%email%'
                         AND pg_constraint.contype = 'u'");
-                    
+
                     if (!empty($constraintExists)) {
-                        // Get the actual constraint name
-                        $constraintName = DB::select("SELECT conname FROM pg_constraint 
-                            JOIN pg_class ON pg_constraint.conrelid = pg_class.oid 
-                            WHERE pg_class.relname = 'users' 
-                            AND pg_constraint.conname LIKE '%email_index%' 
+                        // If it exists, it gets the actual name
+                        $constraintName = DB::select("SELECT conname FROM pg_constraint
+                            JOIN pg_class ON pg_constraint.conrelid = pg_class.oid
+                            WHERE pg_class.relname = 'users'
+                            AND pg_constraint.conname LIKE '%email%'
                             AND pg_constraint.contype = 'u'")[0]->conname;
-                        
+
+                        // Then drops it using the correct name
                         DB::statement("ALTER TABLE users DROP CONSTRAINT \"{$constraintName}\"");
                     }
                 } else {
-                    $table->dropUnique('users_email_index_unique');
+                    // For MySQL and other drivers
+                    $table->dropUnique('users_email_unique');
                 }
             } catch (\Exception $e) {
                 // Ignore if the unique index doesn't exist
