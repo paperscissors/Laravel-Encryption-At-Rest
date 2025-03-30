@@ -1,7 +1,7 @@
 {
     "name": "paperscissorsandglue/laravel-encryption-at-rest",
     "description": "Laravel package for encrypting sensitive data at rest and decrypting it when in use - useful for GDPR, HIPAA, and other compliance requirements",
-    "version": "0.5.0",
+    "version": "0.5.1",
     "keywords": ["laravel", "encryption", "encryption-at-rest", "privacy", "pii", "gdpr", "hipaa"],
     "type": "library",
     "license": "MIT",
