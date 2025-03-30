@@ -1,0 +1,49 @@
+{
+    "name": "paperscissorsandglue/laravel-encryption-at-rest",
+    "description": "Laravel package for encrypting sensitive data at rest and decrypting it when in use - useful for GDPR, HIPAA, and other compliance requirements",
+    "keywords": ["laravel", "encryption", "encryption-at-rest", "privacy", "pii", "gdpr", "hipaa"],
+    "type": "library",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Paper Scissors and Glue",
+            "email": "info@paperscissorsandglue.com"
+        }
+    ],
+    "autoload": {
+        "psr-4": {
+            "Paperscissorsandglue\\GdprLaravel\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Paperscissorsandglue\\GdprLaravel\\Tests\\": "tests"
+        }
+    },
+    "require": {
+        "php": "^8.1",
+        "illuminate/support": "^10.0|^11.0|^12.0",
+        "illuminate/database": "^10.0|^11.0|^12.0",
+        "illuminate/encryption": "^10.0|^11.0|^12.0"
+    },
+    "require-dev": {
+        "orchestra/testbench": "^8.0|^9.0|^10.0",
+        "phpunit/phpunit": "^10.0|^11.0"
+    },
+    "scripts": {
+        "test": "vendor/bin/phpunit",
+        "test-coverage": "vendor/bin/phpunit --coverage-html coverage"
+    },
+    "config": {
+        "sort-packages": true
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Paperscissorsandglue\\GdprLaravel\\EncryptionAtRestServiceProvider"
+            ]
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}

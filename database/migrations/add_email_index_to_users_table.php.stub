@@ -1,0 +1,46 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    /**
+     * Run the migrations.
+     */
+    public function up(): void
+    {
+        Schema::table('users', function (Blueprint $table) {
+            // Add email_index column for searchable encrypted emails
+            $table->string('email_index')->after('email')->nullable()->index();
+            
+            // Remove existing unique index on email since it will be encrypted
+            try {
+                $table->dropUnique('users_email_unique');
+            } catch (\Exception $e) {
+                // Ignore if the unique index doesn't exist
+            }
+            
+            // Add unique index on email_index instead
+            $table->unique('email_index');
+        });
+    }
+
+    /**
+     * Reverse the migrations.
+     */
+    public function down(): void
+    {
+        Schema::table('users', function (Blueprint $table) {
+            // Remove the unique index on email_index
+            $table->dropUnique('users_email_index_unique');
+            
+            // Drop the email_index column
+            $table->dropColumn('email_index');
+            
+            // Add back unique index on email
+            $table->unique('email');
+        });
+    }
+};
