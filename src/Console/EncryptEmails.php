@@ -44,8 +44,18 @@ class EncryptEmails extends Command
         
         // Check if the model has the HasEncryptedEmail trait
         $model = new $modelClass;
-        if (!method_exists($model, 'handleEmailEncryption')) {
-            $this->error("Model {$modelClass} does not use the HasEncryptedEmail trait.");
+        
+        // Check if the class or its parents/traits have the handleEmailEncryption method
+        try {
+            $reflection = new \ReflectionClass($modelClass);
+            $hasTraitMethod = $reflection->hasMethod('handleEmailEncryption');
+            
+            if (!$hasTraitMethod) {
+                $this->error("Model {$modelClass} does not use the HasEncryptedEmail trait.");
+                return 1;
+            }
+        } catch (\Exception $e) {
+            $this->error("Error checking model traits: " . $e->getMessage());
             return 1;
         }
         
@@ -99,7 +109,11 @@ class EncryptEmails extends Command
                     DB::beginTransaction();
                     
                     try {
-                        $record->handleEmailEncryption();
+                        // Use reflection to access the protected method
+                        $reflection = new \ReflectionMethod(get_class($record), 'handleEmailEncryption');
+                        $reflection->setAccessible(true);
+                        $reflection->invoke($record);
+                        
                         $record->save();
                         DB::commit();
                         $count++;
@@ -138,36 +152,70 @@ class EncryptEmails extends Command
         $connection = config('database.default');
         $driver = config("database.connections.{$connection}.driver");
         
+        $backupPath = storage_path('app/backups');
+        if (!file_exists($backupPath)) {
+            mkdir($backupPath, 0755, true);
+        }
+        
+        $db = config("database.connections.{$connection}.database");
+        $user = config("database.connections.{$connection}.username");
+        $password = config("database.connections.{$connection}.password");
+        $host = config("database.connections.{$connection}.host");
+        $port = config("database.connections.{$connection}.port");
+        
+        $timestamp = date('Y-m-d-H-i-s');
+        $filename = $backupPath . '/' . $db . '-' . $timestamp . '.sql';
+        
         if ($driver === 'mysql') {
             $this->info('Creating MySQL backup...');
             
-            $db = config("database.connections.{$connection}.database");
-            $user = config("database.connections.{$connection}.username");
-            $password = config("database.connections.{$connection}.password");
-            $host = config("database.connections.{$connection}.host");
+            // Handle password with special characters
+            $passwordParam = !empty($password) ? "--password='{$password}'" : '';
+            $portParam = !empty($port) ? "--port={$port}" : '';
             
-            $backupPath = storage_path('app/backups');
-            if (!file_exists($backupPath)) {
-                mkdir($backupPath, 0755, true);
-            }
-            
-            $filename = $backupPath . '/' . $db . '-' . date('Y-m-d-H-i-s') . '.sql';
-            
-            $command = "mysqldump --user={$user} --password={$password} --host={$host} {$db} > {$filename}";
+            $command = "mysqldump --user='{$user}' {$passwordParam} --host='{$host}' {$portParam} {$db} > \"{$filename}\"";
             exec($command, $output, $returnVar);
             
-            if ($returnVar === 0) {
-                $this->info("Database backup created at {$filename}");
-            } else {
-                $this->error("Database backup failed. Continue with caution.");
-                if (!$this->confirm('Proceed without backup?', false)) {
-                    $this->info('Operation cancelled by user.');
-                    exit;
-                }
+        } elseif ($driver === 'pgsql') {
+            $this->info('Creating PostgreSQL backup...');
+            
+            // Set environment variables for auth instead of command line for better security
+            $env = [
+                'PGPASSWORD' => $password,
+                'PGUSER' => $user,
+                'PGHOST' => $host,
+            ];
+            
+            if (!empty($port)) {
+                $env['PGPORT'] = $port;
             }
+            
+            $command = "pg_dump -Fc {$db} > \"{$filename}\"";
+            $descriptorspec = [
+                0 => ["pipe", "r"],
+                1 => ["pipe", "w"],
+                2 => ["pipe", "w"]
+            ];
+            
+            $process = proc_open($command, $descriptorspec, $pipes, null, $env);
+            $returnVar = proc_close($process);
+            
         } else {
             $this->warn("Automatic backup not supported for {$driver} database. Please backup your database manually before proceeding.");
             if (!$this->confirm('Continue without backup?', false)) {
+                $this->info('Operation cancelled by user.');
+                exit;
+            }
+            
+            return;
+        }
+        
+        // Check if backup was successful
+        if ($returnVar === 0) {
+            $this->info("Database backup created at {$filename}");
+        } else {
+            $this->error("Database backup failed. Continue with caution.");
+            if (!$this->confirm('Proceed without backup?', false)) {
                 $this->info('Operation cancelled by user.');
                 exit;
             }
