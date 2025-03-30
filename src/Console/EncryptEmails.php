@@ -109,10 +109,16 @@ class EncryptEmails extends Command
                     DB::beginTransaction();
                     
                     try {
-                        // Use reflection to access the protected method
+                        // Store original email
+                        $originalEmail = $record->email;
+                        
+                        // Use reflection to access the protected method to create email_index
                         $reflection = new \ReflectionMethod(get_class($record), 'handleEmailEncryption');
                         $reflection->setAccessible(true);
                         $reflection->invoke($record);
+                        
+                        // Force email update to trigger encryption
+                        $record->email = $originalEmail;
                         
                         $record->save();
                         DB::commit();
@@ -179,18 +185,40 @@ class EncryptEmails extends Command
         } elseif ($driver === 'pgsql') {
             $this->info('Creating PostgreSQL backup...');
             
-            // Set environment variables for auth instead of command line for better security
-            $env = [
-                'PGPASSWORD' => $password,
-                'PGUSER' => $user,
-                'PGHOST' => $host,
-            ];
+            // Change file extension for PostgreSQL dumps
+            $filename = str_replace('.sql', '.dump', $filename);
+            
+            // Add debug information
+            $this->line("Database: {$db}");
+            $this->line("Host: {$host}");
+            
+            // Set environment variables for pg_dump
+            $env = $_SERVER;
+            $env['PGPASSWORD'] = $password;
+            $env['PGUSER'] = $user;
+            $env['PGHOST'] = $host;
+            $env['PGDATABASE'] = $db;
             
             if (!empty($port)) {
                 $env['PGPORT'] = $port;
             }
             
-            $command = "pg_dump -Fc {$db} > \"{$filename}\"";
+            // Check if pg_dump is available
+            exec('which pg_dump', $pgDumpOutput, $pgDumpReturnVar);
+            
+            if ($pgDumpReturnVar !== 0) {
+                $this->error("pg_dump command not found. Please ensure PostgreSQL client tools are installed.");
+                if (!$this->confirm('Proceed without backup?', false)) {
+                    $this->info('Operation cancelled by user.');
+                    exit;
+                }
+                return;
+            }
+            
+            // Try simple format first for better compatibility
+            $command = "pg_dump -f \"{$filename}\"";
+            $this->line("Running: {$command}");
+            
             $descriptorspec = [
                 0 => ["pipe", "r"],
                 1 => ["pipe", "w"],
@@ -198,7 +226,22 @@ class EncryptEmails extends Command
             ];
             
             $process = proc_open($command, $descriptorspec, $pipes, null, $env);
-            $returnVar = proc_close($process);
+            
+            if (is_resource($process)) {
+                $stderr = stream_get_contents($pipes[2]);
+                fclose($pipes[0]);
+                fclose($pipes[1]);
+                fclose($pipes[2]);
+                
+                $returnVar = proc_close($process);
+                
+                if ($returnVar !== 0 && !empty($stderr)) {
+                    $this->error("PostgreSQL Error: " . $stderr);
+                }
+            } else {
+                $this->error("Failed to execute pg_dump command");
+                $returnVar = 1;
+            }
             
         } else {
             $this->warn("Automatic backup not supported for {$driver} database. Please backup your database manually before proceeding.");
