@@ -117,8 +117,9 @@ class EncryptEmails extends Command
                         $reflection->setAccessible(true);
                         $reflection->invoke($record);
                         
-                        // Force email update to trigger encryption
-                        $record->email = $originalEmail;
+                        // Manual handling of email encryption to avoid Laravel mutators/accessors issues
+                        // We'll handle this with reflection to ensure we properly set up the email_index
+                        // without causing unexpected behavior with the encryption
                         
                         // Check if encrypted value would exceed database limit before saving
                         $encryptionService = app()->make(\Paperscissorsandglue\EncryptionAtRest\EncryptionService::class);
@@ -135,8 +136,13 @@ class EncryptEmails extends Command
                                 $this->line("Using compact encryption for email ID {$record->id} (reduced from " . 
                                     strlen($standardEncryptedEmail) . " to " . strlen($compactEncryptedEmail) . " chars)");
                                 
-                                // Apply the compact encryption directly (no need to set email again since we're just using a different format)
-                                $record->attributes['email'] = $compactEncryptedEmail;
+                                // Set the attribute properly using the model's accessor methods
+                                // First we need to get the raw value without triggering encryption again
+                                $reflection = new \ReflectionProperty(get_class($record), 'attributes');
+                                $reflection->setAccessible(true);
+                                $attributes = $reflection->getValue($record);
+                                $attributes['email'] = $compactEncryptedEmail;
+                                $reflection->setValue($record, $attributes);
                             } else {
                                 // Even compact encryption is too long
                                 $this->warn("Email for ID {$record->id} is too long even with compact encryption (" . 
@@ -163,7 +169,14 @@ class EncryptEmails extends Command
                                             $encryptedTruncated = $encryptionService->encrypt($truncatedEmail);
                                             
                                             if (strlen($encryptedTruncated) <= 255) {
-                                                $record->email = $truncatedEmail;
+                                                // Use raw attribute setting to avoid double encryption
+                                                $reflection = new \ReflectionProperty(get_class($record), 'attributes');
+                                                $reflection->setAccessible(true);
+                                                $attributes = $reflection->getValue($record);
+                                                
+                                                // First set the attributes directly to avoid automatic encryption
+                                                $attributes['email'] = $encryptedTruncated;
+                                                $reflection->setValue($record, $attributes);
                                                 $this->line("Email shortened from {$originalEmail} to {$truncatedEmail}");
                                                 break;
                                             }
