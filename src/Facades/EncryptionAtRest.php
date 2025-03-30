@@ -1,6 +1,6 @@
 <?php
 
-namespace Paperscissorsandglue\GdprLaravel\Facades;
+namespace Paperscissorsandglue\EncryptionAtRest\Facades;
 
 use Illuminate\Support\Facades\Facade;
 

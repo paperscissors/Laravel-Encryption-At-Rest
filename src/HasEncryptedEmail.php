@@ -1,6 +1,6 @@
 <?php
 
-namespace Paperscissorsandglue\GdprLaravel;
+namespace Paperscissorsandglue\EncryptionAtRest;
 
 use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Hash;

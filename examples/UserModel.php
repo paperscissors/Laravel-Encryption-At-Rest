@@ -4,9 +4,9 @@ namespace YourApp\Models;
 
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
-use Paperscissorsandglue\GdprLaravel\Encryptable;
-use Paperscissorsandglue\GdprLaravel\EncryptableJson;
-use Paperscissorsandglue\GdprLaravel\HasEncryptedEmail;
+use Paperscissorsandglue\EncryptionAtRest\Encryptable;
+use Paperscissorsandglue\EncryptionAtRest\EncryptableJson;
+use Paperscissorsandglue\EncryptionAtRest\HasEncryptedEmail;
 
 class User extends Authenticatable
 {

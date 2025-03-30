@@ -1,10 +1,10 @@
 <?php
 
-namespace Paperscissorsandglue\GdprLaravel;
+namespace Paperscissorsandglue\EncryptionAtRest;
 
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Contracts\Encryption\Encrypter as EncrypterContract;
-use Paperscissorsandglue\GdprLaravel\Auth\EncryptedEmailAuthServiceProvider;
+use Paperscissorsandglue\EncryptionAtRest\Auth\EncryptedEmailAuthServiceProvider;
 
 class EncryptionAtRestServiceProvider extends ServiceProvider
 {
@@ -47,7 +47,7 @@ class EncryptionAtRestServiceProvider extends ServiceProvider
         if ($this->app->runningInConsole()) {
             // Publish configuration
             $this->publishes([
-                __DIR__.'/../config/gdpr.php' => config_path('encryption-at-rest.php'),
+                __DIR__.'/../config/encryption-at-rest.php' => config_path('encryption-at-rest.php'),
             ], 'encryption-at-rest-config');
 
             // Publish migrations

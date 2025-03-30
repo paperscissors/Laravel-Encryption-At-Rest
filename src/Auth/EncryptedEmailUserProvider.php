@@ -1,6 +1,6 @@
 <?php
 
-namespace Paperscissorsandglue\GdprLaravel\Auth;
+namespace Paperscissorsandglue\EncryptionAtRest\Auth;
 
 use Illuminate\Auth\EloquentUserProvider;
 use Illuminate\Contracts\Auth\Authenticatable as UserContract;

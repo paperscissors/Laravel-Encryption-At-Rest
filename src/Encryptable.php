@@ -1,6 +1,6 @@
 <?php
 
-namespace Paperscissorsandglue\GdprLaravel;
+namespace Paperscissorsandglue\EncryptionAtRest;
 
 use Illuminate\Support\Facades\App;
 
@@ -67,7 +67,7 @@ trait Encryptable
     /**
      * Get the encryption service.
      *
-     * @return \Paperscissorsandglue\GdprLaravel\EncryptionService
+     * @return \Paperscissorsandglue\EncryptionAtRest\EncryptionService
      */
     protected function getEncryptionService()
     {

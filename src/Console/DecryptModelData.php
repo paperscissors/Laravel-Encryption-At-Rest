@@ -1,6 +1,6 @@
 <?php
 
-namespace Paperscissorsandglue\GdprLaravel\Console;
+namespace Paperscissorsandglue\EncryptionAtRest\Console;
 
 use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Model;
@@ -50,9 +50,9 @@ class DecryptModelData extends Command
         $model = new $modelClass;
         $traits = $this->getTraits($model);
         
-        $hasEncryptable = in_array('Paperscissorsandglue\GdprLaravel\Encryptable', $traits);
-        $hasEncryptableJson = in_array('Paperscissorsandglue\GdprLaravel\EncryptableJson', $traits);
-        $hasEncryptedEmail = in_array('Paperscissorsandglue\GdprLaravel\HasEncryptedEmail', $traits);
+        $hasEncryptable = in_array('Paperscissorsandglue\EncryptionAtRest\Encryptable', $traits);
+        $hasEncryptableJson = in_array('Paperscissorsandglue\EncryptionAtRest\EncryptableJson', $traits);
+        $hasEncryptedEmail = in_array('Paperscissorsandglue\EncryptionAtRest\HasEncryptedEmail', $traits);
         
         if (!$hasEncryptable && !$hasEncryptableJson && !$hasEncryptedEmail) {
             $this->error("Model {$modelClass} does not use any encryption traits (Encryptable, EncryptableJson, or HasEncryptedEmail).");
@@ -185,7 +185,7 @@ class DecryptModelData extends Command
     protected function decryptRecord($record, $hasEncryptable, $hasEncryptableJson, $hasEncryptedEmail)
     {
         // Get the encryption service
-        $encryptionService = app(\Paperscissorsandglue\GdprLaravel\EncryptionService::class);
+        $encryptionService = app(\Paperscissorsandglue\EncryptionAtRest\EncryptionService::class);
         
         // Process regular fields
         if ($hasEncryptable && property_exists($record, 'encryptable')) {

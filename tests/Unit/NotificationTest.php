@@ -1,10 +1,10 @@
 <?php
 
-namespace Paperscissorsandglue\GdprLaravel\Tests\Unit;
+namespace Paperscissorsandglue\EncryptionAtRest\Tests\Unit;
 
 use Orchestra\Testbench\TestCase;
-use Paperscissorsandglue\GdprLaravel\EncryptionAtRestServiceProvider;
-use Paperscissorsandglue\GdprLaravel\HasEncryptedEmail;
+use Paperscissorsandglue\EncryptionAtRest\EncryptionAtRestServiceProvider;
+use Paperscissorsandglue\EncryptionAtRest\HasEncryptedEmail;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 

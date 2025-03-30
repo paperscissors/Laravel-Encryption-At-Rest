@@ -13,12 +13,12 @@
     ],
     "autoload": {
         "psr-4": {
-            "Paperscissorsandglue\\GdprLaravel\\": "src/"
+            "Paperscissorsandglue\\EncryptionAtRest\\": "src/"
         }
     },
     "autoload-dev": {
         "psr-4": {
-            "Paperscissorsandglue\\GdprLaravel\\Tests\\": "tests"
+            "Paperscissorsandglue\\EncryptionAtRest\\Tests\\": "tests"
         }
     },
     "require": {
@@ -41,7 +41,7 @@
     "extra": {
         "laravel": {
             "providers": [
-                "Paperscissorsandglue\\GdprLaravel\\EncryptionAtRestServiceProvider"
+                "Paperscissorsandglue\\EncryptionAtRest\\EncryptionAtRestServiceProvider"
             ]
         }
     },

@@ -1,11 +1,11 @@
 <?php
 
-namespace Paperscissorsandglue\GdprLaravel\Tests\Unit;
+namespace Paperscissorsandglue\EncryptionAtRest\Tests\Unit;
 
 use Orchestra\Testbench\TestCase;
-use Paperscissorsandglue\GdprLaravel\EncryptionAtRestServiceProvider;
-use Paperscissorsandglue\GdprLaravel\EncryptableJson;
-use Paperscissorsandglue\GdprLaravel\EncryptionService;
+use Paperscissorsandglue\EncryptionAtRest\EncryptionAtRestServiceProvider;
+use Paperscissorsandglue\EncryptionAtRest\EncryptableJson;
+use Paperscissorsandglue\EncryptionAtRest\EncryptionService;
 use Illuminate\Database\Eloquent\Model;
 
 class EncryptableJsonTest extends TestCase

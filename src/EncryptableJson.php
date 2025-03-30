@@ -1,6 +1,6 @@
 <?php
 
-namespace Paperscissorsandglue\GdprLaravel;
+namespace Paperscissorsandglue\EncryptionAtRest;
 
 use Illuminate\Support\Facades\App;
 
@@ -83,7 +83,7 @@ trait EncryptableJson
     /**
      * Get the encryption service.
      *
-     * @return \Paperscissorsandglue\GdprLaravel\EncryptionService
+     * @return \Paperscissorsandglue\EncryptionAtRest\EncryptionService
      */
     protected function getJsonEncryptionService()
     {

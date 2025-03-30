@@ -56,7 +56,7 @@ Add the `Encryptable` trait to your model and define which attributes should be 
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Paperscissorsandglue\GdprLaravel\Encryptable;
+use Paperscissorsandglue\EncryptionAtRest\Encryptable;
 
 class User extends Model
 {
@@ -87,7 +87,7 @@ For JSON columns where you only want to encrypt certain fields within the JSON s
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Paperscissorsandglue\GdprLaravel\EncryptableJson;
+use Paperscissorsandglue\EncryptionAtRest\EncryptableJson;
 
 class UserProfile extends Model
 {
@@ -180,7 +180,7 @@ namespace App\Models;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
-use Paperscissorsandglue\GdprLaravel\HasEncryptedEmail;
+use Paperscissorsandglue\EncryptionAtRest\HasEncryptedEmail;
 
 class User extends Authenticatable
 {
@@ -205,10 +205,10 @@ class User extends Authenticatable
 
 ```bash
 # Run in dry-run mode first to see what would be changed
-php artisan gdpr:encrypt-emails "App\Models\User" --dry-run
+php artisan encryption:encrypt-emails "App\Models\User" --dry-run
 
 # When ready, run the actual encryption (use --chunk=XX to set batch size)
-php artisan gdpr:encrypt-emails "App\Models\User"
+php artisan encryption:encrypt-emails "App\Models\User"
 ```
 
 Or if you prefer, create a migration:
@@ -264,7 +264,7 @@ $user = User::whereEmail('user@example.com')->first();
 You can also use the `EncryptionService` directly for custom encryption needs:
 
 ```php
-use Paperscissorsandglue\GdprLaravel\EncryptionService;
+use Paperscissorsandglue\EncryptionAtRest\EncryptionService;
 
 public function __construct(EncryptionService $encryptionService)
 {
@@ -289,7 +289,7 @@ public function retrieveData($encryptedData)
 You can use the provided facade for quick access to encryption functionality:
 
 ```php
-use Paperscissorsandglue\GdprLaravel\Facades\EncryptionAtRest;
+use Paperscissorsandglue\EncryptionAtRest\Facades\EncryptionAtRest;
 
 $encrypted = EncryptionAtRest::encrypt('sensitive data');
 $decrypted = EncryptionAtRest::decrypt($encrypted);

@@ -1,6 +1,6 @@
 <?php
 
-namespace Paperscissorsandglue\GdprLaravel\Console;
+namespace Paperscissorsandglue\EncryptionAtRest\Console;
 
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Schema;

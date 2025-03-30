@@ -1,11 +1,11 @@
 <?php
 
-namespace Paperscissorsandglue\GdprLaravel\Tests\Unit;
+namespace Paperscissorsandglue\EncryptionAtRest\Tests\Unit;
 
 use Orchestra\Testbench\TestCase;
-use Paperscissorsandglue\GdprLaravel\EncryptionAtRestServiceProvider;
-use Paperscissorsandglue\GdprLaravel\HasEncryptedEmail;
-use Paperscissorsandglue\GdprLaravel\Auth\EncryptedEmailUserProvider;
+use Paperscissorsandglue\EncryptionAtRest\EncryptionAtRestServiceProvider;
+use Paperscissorsandglue\EncryptionAtRest\HasEncryptedEmail;
+use Paperscissorsandglue\EncryptionAtRest\Auth\EncryptedEmailUserProvider;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Auth\AuthManager;
 use Illuminate\Support\Facades\Hash;
