@@ -145,37 +145,38 @@ class EncryptEmails extends Command
                                 // Options:
                                 // 1. Store a shortened email (last part omitted)
                                 // 2. Store just the email_index and a note
-                            
-                            if ($this->confirm("Would you like to store a truncated version of this email?", true)) {
-                                // Truncate email to fit in the database while keeping domain
-                                $parts = explode('@', $originalEmail);
-                                if (count($parts) === 2) {
-                                    $username = $parts[0];
-                                    $domain = $parts[1];
-                                    
-                                    // Keep shortening username until it fits
-                                    $maxTries = 10;
-                                    $tries = 0;
-                                    
-                                    while ($tries < $maxTries) {
-                                        $truncatedUsername = substr($username, 0, max(1, strlen($username) - $tries * 5));
-                                        $truncatedEmail = $truncatedUsername . '@' . $domain;
-                                        $encryptedTruncated = $encryptionService->encrypt($truncatedEmail);
+                                
+                                if ($this->confirm("Would you like to store a truncated version of this email?", true)) {
+                                    // Truncate email to fit in the database while keeping domain
+                                    $parts = explode('@', $originalEmail);
+                                    if (count($parts) === 2) {
+                                        $username = $parts[0];
+                                        $domain = $parts[1];
                                         
-                                        if (strlen($encryptedTruncated) <= 255) {
-                                            $record->email = $truncatedEmail;
-                                            $this->line("Email shortened from {$originalEmail} to {$truncatedEmail}");
-                                            break;
+                                        // Keep shortening username until it fits
+                                        $maxTries = 10;
+                                        $tries = 0;
+                                        
+                                        while ($tries < $maxTries) {
+                                            $truncatedUsername = substr($username, 0, max(1, strlen($username) - $tries * 5));
+                                            $truncatedEmail = $truncatedUsername . '@' . $domain;
+                                            $encryptedTruncated = $encryptionService->encrypt($truncatedEmail);
+                                            
+                                            if (strlen($encryptedTruncated) <= 255) {
+                                                $record->email = $truncatedEmail;
+                                                $this->line("Email shortened from {$originalEmail} to {$truncatedEmail}");
+                                                break;
+                                            }
+                                            
+                                            $tries++;
                                         }
-                                        
-                                        $tries++;
                                     }
+                                } else {
+                                    // Skip this record
+                                    $this->info("Skipping encryption for email ID {$record->id}");
+                                    DB::rollBack();
+                                    continue;
                                 }
-                            } else {
-                                // Skip this record
-                                $this->info("Skipping encryption for email ID {$record->id}");
-                                DB::rollBack();
-                                continue;
                             }
                         }
                         
