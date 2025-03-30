@@ -192,17 +192,6 @@ class EncryptEmails extends Command
             $this->line("Database: {$db}");
             $this->line("Host: {$host}");
             
-            // Set environment variables for pg_dump
-            $env = $_SERVER;
-            $env['PGPASSWORD'] = $password;
-            $env['PGUSER'] = $user;
-            $env['PGHOST'] = $host;
-            $env['PGDATABASE'] = $db;
-            
-            if (!empty($port)) {
-                $env['PGPORT'] = $port;
-            }
-            
             // Check if pg_dump is available
             exec('which pg_dump', $pgDumpOutput, $pgDumpReturnVar);
             
@@ -215,32 +204,45 @@ class EncryptEmails extends Command
                 return;
             }
             
-            // Try simple format first for better compatibility
-            $command = "pg_dump -f \"{$filename}\"";
-            $this->line("Running: {$command}");
+            // Create backup command using Laravel's .env/config values
+            // First prepare connection string with credentials
+            $connectionString = "postgresql://";
             
-            $descriptorspec = [
-                0 => ["pipe", "r"],
-                1 => ["pipe", "w"],
-                2 => ["pipe", "w"]
-            ];
-            
-            $process = proc_open($command, $descriptorspec, $pipes, null, $env);
-            
-            if (is_resource($process)) {
-                $stderr = stream_get_contents($pipes[2]);
-                fclose($pipes[0]);
-                fclose($pipes[1]);
-                fclose($pipes[2]);
-                
-                $returnVar = proc_close($process);
-                
-                if ($returnVar !== 0 && !empty($stderr)) {
-                    $this->error("PostgreSQL Error: " . $stderr);
+            // Add credentials if they exist
+            if (!empty($user)) {
+                $connectionString .= urlencode($user);
+                if (!empty($password)) {
+                    $connectionString .= ":" . urlencode($password);
                 }
-            } else {
-                $this->error("Failed to execute pg_dump command");
-                $returnVar = 1;
+                $connectionString .= "@";
+            }
+            
+            // Add host and port
+            $connectionString .= urlencode($host);
+            if (!empty($port)) {
+                $connectionString .= ":" . $port;
+            }
+            
+            // Add database name
+            $connectionString .= "/" . urlencode($db);
+            
+            // Build the pg_dump command with the connection string
+            $command = "pg_dump \"{$connectionString}\" -f \"{$filename}\"";
+            
+            // Execute the command
+            $this->line("Running backup...");
+            exec($command, $output, $returnVar);
+            
+            // Check for errors
+            if ($returnVar !== 0) {
+                $this->error("PostgreSQL backup failed. If you're using a password, make sure pg_dump can access it properly.");
+                $this->line("You can try running the backup manually with: pg_dump -h {$host} -U {$user} -f {$filename} {$db}");
+                
+                if (!$this->confirm('Proceed without backup?', false)) {
+                    $this->info('Operation cancelled by user.');
+                    exit;
+                }
+                return;
             }
             
         } else {
