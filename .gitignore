@@ -8,7 +8,8 @@
 .LSOverride
 
 # Icon must end with two \r
-Icon
+Icon
+
 
 # Thumbnails
 ._*
@@ -506,3 +507,4 @@ MigrationBackup/
 # End of https://www.toptal.com/developers/gitignore/api/macos,php,phpstorm,vs
 
 /.idea
+/vendor/
