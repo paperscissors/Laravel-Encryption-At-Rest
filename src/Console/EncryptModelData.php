@@ -151,10 +151,17 @@ class EncryptModelData extends Command
             return 0;
         }
         
+        // Check if we're using PostgreSQL with its strict character limits
+        $databaseHasLimits = DB::connection()->getDriverName() === 'pgsql';
+        $this->info("Database type: " . DB::connection()->getDriverName());
+        if ($databaseHasLimits) {
+            $this->info("Using compact encryption for PostgreSQL's varchar limits");
+        }
+        
         $bar = $this->output->createProgressBar($total);
         $bar->start();
         
-        $query->chunk($chunkSize, function ($records) use (&$count, $dryRun, $bar, $hasEncryptedEmail, $hasEncryptable, $hasEncryptableJson) {
+        $query->chunk($chunkSize, function ($records) use (&$count, $dryRun, $bar, $hasEncryptedEmail, $hasEncryptable, $hasEncryptableJson, $databaseHasLimits) {
             foreach ($records as $record) {
                 // For email encryption, we need to trigger the email encryption
                 if ($hasEncryptedEmail && !empty($record->email) && empty($record->email_index)) {
@@ -187,10 +194,25 @@ class EncryptModelData extends Command
                             $encryptableFields = $property->getValue($record);
                             
                             if (is_array($encryptableFields)) {
+                                $service = app()->make(\Paperscissorsandglue\EncryptionAtRest\EncryptionService::class);
+                                
                                 foreach ($encryptableFields as $field) {
-                                    if (isset($record->$field)) {
-                                        // This will mark it as dirty to force re-encryption
-                                        $record->$field = $record->$field;
+                                    if (isset($record->$field) && !empty($record->$field)) {
+                                        try {
+                                            // Try to decrypt to see if it's already encrypted
+                                            $service->decrypt($record->$field);
+                                            // If no exception, it's already encrypted
+                                        } catch (\Exception $e) {
+                                            // Not yet encrypted - use special handling for PostgreSQL
+                                            if ($databaseHasLimits) {
+                                                // Use encryptForStorage which handles size limits
+                                                $originalValue = $record->$field;
+                                                $record->$field = $service->encryptForStorage($originalValue, $databaseHasLimits);
+                                            } else {
+                                                // Mark as dirty to trigger standard encryption
+                                                $record->$field = $record->$field;
+                                            }
+                                        }
                                     }
                                 }
                             }

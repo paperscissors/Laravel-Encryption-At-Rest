@@ -3,6 +3,7 @@
 namespace Paperscissorsandglue\EncryptionAtRest;
 
 use Illuminate\Support\Facades\App;
+use Illuminate\Support\Facades\DB;
 
 trait Encryptable
 {
@@ -39,9 +40,12 @@ trait Encryptable
      */
     protected function encryptAttributes()
     {
+        $databaseHasLimits = DB::connection()->getDriverName() === 'pgsql';
+        
         foreach ($this->getEncryptableAttributes() as $attribute) {
             if (isset($this->attributes[$attribute]) && ! empty($this->attributes[$attribute])) {
-                $this->attributes[$attribute] = $this->encryptValue($this->attributes[$attribute]);
+                // Use the field-specific encryption that handles character limits
+                $this->attributes[$attribute] = $this->encryptValueForStorage($this->attributes[$attribute], $databaseHasLimits);
             }
         }
     }
@@ -83,6 +87,18 @@ trait Encryptable
     protected function encryptValue($value)
     {
         return $this->getEncryptionService()->encrypt($value);
+    }
+    
+    /**
+     * Encrypt a value for storage with automatic size management.
+     *
+     * @param  mixed  $value
+     * @param  bool  $databaseHasLimits
+     * @return string
+     */
+    protected function encryptValueForStorage($value, $databaseHasLimits = false)
+    {
+        return $this->getEncryptionService()->encryptForStorage($value, $databaseHasLimits);
     }
 
     /**

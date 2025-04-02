@@ -21,6 +21,13 @@ class EncryptionService
      * @var bool
      */
     protected $compactEmailEncryption;
+    
+    /**
+     * Flag for compact field encryption.
+     *
+     * @var bool
+     */
+    protected $compactFieldEncryption;
 
     /**
      * Create a new encryption service instance.
@@ -32,6 +39,7 @@ class EncryptionService
     {
         $this->encrypter = $encrypter;
         $this->compactEmailEncryption = Config::get('encryption-at-rest.compact_email_encryption', false);
+        $this->compactFieldEncryption = Config::get('encryption-at-rest.compact_field_encryption', false);
     }
 
     /**
@@ -39,18 +47,100 @@ class EncryptionService
      *
      * @param  mixed  $value
      * @param  bool|null  $forceCompact  Force compact mode regardless of config
+     * @param  bool  $isFieldEncryption  Whether this is for a field or email encryption
      * @return string
      */
-    public function encrypt($value, $forceCompact = null)
+    public function encrypt($value, $forceCompact = null, $isFieldEncryption = false)
     {
-        // For emails, use the compact encryption method if enabled
-        $useCompact = $forceCompact ?? $this->compactEmailEncryption;
+        // Standard encryption result - to check size
+        $standardEncrypted = $this->encrypter->encrypt($value);
         
-        if ($useCompact && is_string($value) && Str::contains($value, '@')) {
+        // For emails, use the compact encryption method if enabled
+        $useCompactEmail = ($forceCompact ?? $this->compactEmailEncryption) && is_string($value) && Str::contains($value, '@');
+        
+        // For regular fields, use compact encryption if enabled or if standard result is too long
+        $useCompactField = ($forceCompact ?? $this->compactFieldEncryption) && is_string($value) && strlen($standardEncrypted) > 255;
+        
+        if ($useCompactEmail || $useCompactField) {
             return $this->compactEncrypt($value);
         }
         
-        return $this->encrypter->encrypt($value);
+        return $standardEncrypted;
+    }
+    
+    /**
+     * Encrypt a value with length detection and fallback to compact encryption if needed
+     * 
+     * @param  mixed  $value
+     * @param  bool  $databaseHasLimits  Whether database has strict column limits
+     * @return string
+     */
+    public function encryptForStorage($value, $databaseHasLimits = false)
+    {
+        if (!is_string($value)) {
+            return $this->encrypter->encrypt($value);
+        }
+        
+        // Standard encryption first
+        $standardEncrypted = $this->encrypter->encrypt($value);
+        
+        // Check if encrypted value would exceed database limit
+        if ($databaseHasLimits && strlen($standardEncrypted) > 255) {
+            // Try compact encryption
+            $compactEncrypted = $this->compactEncrypt($value);
+            
+            if (strlen($compactEncrypted) <= 255) {
+                return $compactEncrypted;
+            }
+            
+            // If even compact encryption is too large, we'll need to truncate the value
+            // This is a last resort, and should be handled carefully
+            if (Str::contains($value, '@')) {
+                // Special handling for emails - keep domain intact
+                $parts = explode('@', $value);
+                if (count($parts) === 2) {
+                    $username = $parts[0];
+                    $domain = $parts[1];
+                    
+                    // Keep shortening username until it fits
+                    $maxTries = 10;
+                    $tries = 0;
+                    
+                    while ($tries < $maxTries) {
+                        $truncatedUsername = substr($username, 0, max(1, strlen($username) - $tries * 5));
+                        $truncatedValue = $truncatedUsername . '@' . $domain;
+                        $encryptedTruncated = $this->compactEncrypt($truncatedValue);
+                        
+                        if (strlen($encryptedTruncated) <= 255) {
+                            return $encryptedTruncated;
+                        }
+                        
+                        $tries++;
+                    }
+                }
+            } else {
+                // For non-email values, just truncate directly
+                $maxTries = 10;
+                $tries = 0;
+                
+                while ($tries < $maxTries) {
+                    $truncatedValue = substr($value, 0, max(1, strlen($value) - $tries * 10));
+                    $encryptedTruncated = $this->compactEncrypt($truncatedValue);
+                    
+                    if (strlen($encryptedTruncated) <= 255) {
+                        return $encryptedTruncated;
+                    }
+                    
+                    $tries++;
+                }
+            }
+            
+            // If we get here, we couldn't make it fit within 255 chars
+            // Return as much as we can fit, which might be just a few characters
+            return $this->compactEncrypt(substr($value, 0, 20) . '...');
+        }
+        
+        return $standardEncrypted;
     }
 
     /**

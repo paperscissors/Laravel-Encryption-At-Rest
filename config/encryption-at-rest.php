@@ -36,4 +36,18 @@ return [
     |
     */
     'compact_email_encryption' => env('ENCRYPTION_AT_REST_COMPACT_EMAIL', false),
+    
+    /*
+    |--------------------------------------------------------------------------
+    | Compact Mode for Field Encryption
+    |--------------------------------------------------------------------------
+    |
+    | When enabled, all fields (not just emails) will be encrypted using a more
+    | compact representation that produces shorter ciphertext. This is useful for
+    | databases with strict field length limits like PostgreSQL. The tradeoff is
+    | that the encrypted value is marginally less secure but still adequate for
+    | most use cases.
+    |
+    */
+    'compact_field_encryption' => env('ENCRYPTION_AT_REST_COMPACT_FIELD', false),
 ];
