@@ -24,6 +24,30 @@ trait HasEncryptedEmail
             }
         });
     }
+    
+    /**
+     * Get the email address that should be used for password resets.
+     * This method is required for Laravel's password reset functionality.
+     *
+     * @return string
+     */
+    public function getEmailForPasswordReset()
+    {
+        // The email will be decrypted by the __get or getAttribute methods
+        return $this->email;
+    }
+    
+    /**
+     * Find user by email for authentication
+     * Used by Laravel Passport and other auth systems
+     *
+     * @param string $username The email to search by
+     * @return \Illuminate\Database\Eloquent\Model|null
+     */
+    public function findForPassport($username)
+    {
+        return static::whereEmail($username)->first();
+    }
 
     /**
      * Handle email encryption and hashing when setting the email

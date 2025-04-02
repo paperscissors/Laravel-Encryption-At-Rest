@@ -20,6 +20,66 @@ class EncryptedEmailUserProvider extends EloquentUserProvider
     {
         parent::__construct($hasher, $model);
     }
+    
+    /**
+     * Get the first key from the credential array.
+     *
+     * @param  array  $credentials
+     * @return string|null
+     */
+    protected function firstCredentialKey(array $credentials)
+    {
+        foreach ($credentials as $key => $value) {
+            return $key;
+        }
+        
+        return null;
+    }
+    
+    /**
+     * Retrieve a user by their unique identifier and "remember me" token.
+     *
+     * @param  mixed  $identifier
+     * @param  string  $token
+     * @return \Illuminate\Contracts\Auth\Authenticatable|null
+     */
+    public function retrieveByToken($identifier, $token)
+    {
+        $model = $this->createModel();
+
+        $retrievedModel = $this->newModelQuery($model)
+            ->where($model->getAuthIdentifierName(), $identifier)
+            ->first();
+
+        if (! $retrievedModel) {
+            return null;
+        }
+
+        $rememberToken = $retrievedModel->getRememberToken();
+
+        return $rememberToken && hash_equals($rememberToken, $token) 
+            ? $retrievedModel : null;
+    }
+    
+    /**
+     * Update the "remember me" token for the given user in storage.
+     *
+     * @param  \Illuminate\Contracts\Auth\Authenticatable  $user
+     * @param  string  $token
+     * @return void
+     */
+    public function updateRememberToken(UserContract $user, $token)
+    {
+        $user->setRememberToken($token);
+        
+        $timestamps = $user->timestamps;
+        
+        $user->timestamps = false;
+        
+        $user->save();
+        
+        $user->timestamps = $timestamps;
+    }
 
     /**
      * Retrieve a user by the given credentials.
