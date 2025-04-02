@@ -64,11 +64,27 @@ class EncryptModelData extends Command
         $fieldsToEncrypt = [];
         
         if ($hasEncryptable && property_exists($model, 'encryptable')) {
-            $fieldsToEncrypt = array_merge($fieldsToEncrypt, $model->encryptable);
+            // Get value of encryptable property using reflection to access protected properties
+            $reflection = new ReflectionClass($model);
+            $property = $reflection->getProperty('encryptable');
+            $property->setAccessible(true);
+            $encryptableFields = $property->getValue($model);
+            
+            if (is_array($encryptableFields)) {
+                $fieldsToEncrypt = array_merge($fieldsToEncrypt, $encryptableFields);
+            }
         }
         
         if ($hasEncryptableJson && property_exists($model, 'encryptableJson')) {
-            $this->info("Found JSON fields to encrypt: " . implode(', ', array_keys($model->encryptableJson)));
+            // Get value of encryptableJson property using reflection
+            $reflection = new ReflectionClass($model);
+            $property = $reflection->getProperty('encryptableJson');
+            $property->setAccessible(true);
+            $encryptableJsonFields = $property->getValue($model);
+            
+            if (is_array($encryptableJsonFields)) {
+                $this->info("Found JSON fields to encrypt: " . implode(', ', array_keys($encryptableJsonFields)));
+            }
         }
         
         if ($hasEncryptedEmail) {
@@ -86,7 +102,7 @@ class EncryptModelData extends Command
             return 1;
         }
         
-        if ($hasEncryptable) {
+        if ($hasEncryptable && !empty($fieldsToEncrypt)) {
             $this->info("Found fields to encrypt: " . implode(', ', $fieldsToEncrypt));
         }
         
@@ -138,7 +154,7 @@ class EncryptModelData extends Command
         $bar = $this->output->createProgressBar($total);
         $bar->start();
         
-        $query->chunk($chunkSize, function ($records) use (&$count, $dryRun, $bar, $hasEncryptedEmail) {
+        $query->chunk($chunkSize, function ($records) use (&$count, $dryRun, $bar, $hasEncryptedEmail, $hasEncryptable, $hasEncryptableJson) {
             foreach ($records as $record) {
                 // For email encryption, we need to trigger the email encryption
                 if ($hasEncryptedEmail && !empty($record->email) && empty($record->email_index)) {
@@ -163,6 +179,40 @@ class EncryptModelData extends Command
                 else if (!$dryRun) {
                     DB::beginTransaction();
                     try {
+                        // Force updating to ensure all fields get re-encrypted
+                        if ($hasEncryptable && property_exists($record, 'encryptable')) {
+                            $reflection = new ReflectionClass($record);
+                            $property = $reflection->getProperty('encryptable');
+                            $property->setAccessible(true);
+                            $encryptableFields = $property->getValue($record);
+                            
+                            if (is_array($encryptableFields)) {
+                                foreach ($encryptableFields as $field) {
+                                    if (isset($record->$field)) {
+                                        // This will mark it as dirty to force re-encryption
+                                        $record->$field = $record->$field;
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // Handle JSON fields
+                        if ($hasEncryptableJson && property_exists($record, 'encryptableJson')) {
+                            $reflection = new ReflectionClass($record);
+                            $property = $reflection->getProperty('encryptableJson');
+                            $property->setAccessible(true);
+                            $encryptableJsonFields = $property->getValue($record);
+                            
+                            if (is_array($encryptableJsonFields)) {
+                                foreach ($encryptableJsonFields as $jsonField => $encryptKeys) {
+                                    if (isset($record->$jsonField)) {
+                                        // Touch the field to mark it dirty and force re-encryption
+                                        $record->$jsonField = $record->$jsonField;
+                                    }
+                                }
+                            }
+                        }
+                        
                         $record->save();
                         DB::commit();
                         $count++;
