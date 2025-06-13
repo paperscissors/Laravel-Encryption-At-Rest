@@ -169,7 +169,7 @@ class EncryptEmails extends Command
             $passwordParam = !empty($password) ? "--password='{$password}'" : '';
             $portParam = !empty($port) ? "--port={$port}" : '';
             
-            $command = 'mysqldump --user=''.$user.'' '.$passwordParam.' --host=''.$host.'' '.$portParam.' '.$db.' > "'.$filename.'"';
+            $command = "mysqldump --user='{$user}' {$passwordParam} --host='{$host}' {$portParam} {$db} > \"{$filename}\"";
             exec($command, $output, $returnVar);
             
         } elseif ($driver === 'pgsql') {
