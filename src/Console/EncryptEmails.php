@@ -169,7 +169,7 @@ class EncryptEmails extends Command
             $passwordParam = !empty($password) ? "--password='{$password}'" : '';
             $portParam = !empty($port) ? "--port={$port}" : '';
             
-            $command = "mysqldump --user='{$user}' {$passwordParam} --host='{$host}' {$portParam} {$db} > "{$filename}"";
+            $command = 'mysqldump --user=''.$user.'' '.$passwordParam.' --host=''.$host.'' '.$portParam.' '.$db.' > "'.$filename.'"';
             exec($command, $output, $returnVar);
             
         } elseif ($driver === 'pgsql') {
@@ -217,8 +217,9 @@ class EncryptEmails extends Command
             $connectionString .= "/" . urlencode($db);
             
             // Build the pg_dump command with the connection string
-            $command = "pg_dump "{$connectionString}" -f "{$filename}"";
-            
+            $command = 'pg_dump "'.$connectionString.'" -f "'.$filename.'"';
+
+
             // Execute the command
             $this->line("Running backup...");
             exec($command, $output, $returnVar);
