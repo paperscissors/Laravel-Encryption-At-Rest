@@ -391,6 +391,98 @@ class EncryptableTest extends TestCase
         $this->assertEquals('123 Main Street', $array['street_1']);
         $this->assertEquals('Apt 4B', $array['street_2']);
     }
+
+    public function testDoubleEncryptionDecryption()
+    {
+        // Create a test table
+        $this->app['db']->connection()->getSchemaBuilder()->create('test_models', function ($table) {
+            $table->increments('id');
+            $table->text('address')->nullable();
+            $table->timestamps();
+        });
+
+        $encryptionService = $this->app->make(EncryptionService::class);
+        
+        // Use reflection to access compact encryption
+        $reflection = new \ReflectionClass($encryptionService);
+        $compactEncryptMethod = $reflection->getMethod('compactEncrypt');
+        $compactEncryptMethod->setAccessible(true);
+
+        // Create a double-encrypted scenario:
+        // 1. First encrypt with Laravel standard encryption
+        // 2. Then encrypt that result with compact encryption
+        $originalValue = '123 Main Street';
+        $firstEncryption = $encryptionService->encrypt($originalValue); // Laravel standard
+        $doubleEncrypted = $compactEncryptMethod->invokeArgs($encryptionService, [$firstEncryption]); // Compact of encrypted
+        
+        // Manually insert into database with double encryption
+        $id = $this->app['db']->connection()->table('test_models')->insertGetId([
+            'address' => $doubleEncrypted,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        // Retrieve using Eloquent - this should handle double decryption
+        $model = TestEncryptableModel::find($id);
+        
+        // Check that the value is properly decrypted (should handle double encryption)
+        $this->assertEquals($originalValue, $model->address);
+        
+        // Verify the raw database value is the double encrypted value
+        $rawData = $this->app['db']->connection()->table('test_models')->where('id', $id)->first();
+        $this->assertTrue(strpos($rawData->address, 'c:') === 0);
+        $this->assertNotEquals($originalValue, $rawData->address);
+    }
+
+    public function testSingleEncryptionOnSaveOnly()
+    {
+        // Create a test table
+        $this->app['db']->connection()->getSchemaBuilder()->create('test_models', function ($table) {
+            $table->increments('id');
+            $table->text('email')->nullable();
+            $table->text('phone')->nullable();
+            $table->timestamps();
+        });
+
+        // Create a new model
+        $model = new TestEncryptableModel();
+        
+        // Set values - these should NOT be encrypted yet
+        $model->email = 'test@example.com';
+        $model->phone = '123-456-7890';
+        
+        // Check that the values are still plain text before save
+        $this->assertEquals('test@example.com', $model->email);
+        $this->assertEquals('123-456-7890', $model->phone);
+        
+        // Check the raw attributes are also plain text
+        $this->assertEquals('test@example.com', $model->getAttributes()['email']);
+        $this->assertEquals('123-456-7890', $model->getAttributes()['phone']);
+        
+        // Now save the model - this should encrypt the values
+        $model->save();
+        
+        // After save, when accessed, they should still return the original values
+        $this->assertEquals('test@example.com', $model->email);
+        $this->assertEquals('123-456-7890', $model->phone);
+        
+        // But the raw database should be encrypted
+        $rawData = $this->app['db']->connection()->table('test_models')->where('id', $model->id)->first();
+        $this->assertNotEquals('test@example.com', $rawData->email);
+        $this->assertNotEquals('123-456-7890', $rawData->phone);
+        
+        // And they should be detectable as encrypted
+        $reflection = new \ReflectionClass($model);
+        $method = $reflection->getMethod('isValueEncrypted');
+        $method->setAccessible(true);
+        $this->assertTrue($method->invokeArgs($model, [$rawData->email]));
+        $this->assertTrue($method->invokeArgs($model, [$rawData->phone]));
+        
+        // Retrieve a fresh instance and verify decryption works
+        $freshModel = TestEncryptableModel::find($model->id);
+        $this->assertEquals('test@example.com', $freshModel->email);
+        $this->assertEquals('123-456-7890', $freshModel->phone);
+    }
 }
 
 class TestEncryptableModel extends Model

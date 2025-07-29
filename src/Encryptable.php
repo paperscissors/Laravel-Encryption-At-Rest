@@ -49,8 +49,11 @@ trait Encryptable
         
         foreach ($this->getEncryptableAttributes() as $attribute) {
             if (isset($this->attributes[$attribute]) && ! empty($this->attributes[$attribute])) {
-                // Use the field-specific encryption that handles character limits
-                $this->attributes[$attribute] = $this->encryptValueForStorage($this->attributes[$attribute], $databaseHasLimits);
+                // Only encrypt if the value is not already encrypted
+                if (!$this->isValueEncrypted($this->attributes[$attribute])) {
+                    // Use the field-specific encryption that handles character limits
+                    $this->attributes[$attribute] = $this->encryptValueForStorage($this->attributes[$attribute], $databaseHasLimits);
+                }
             }
         }
     }
@@ -114,7 +117,19 @@ trait Encryptable
      */
     protected function decryptValue($value)
     {
-        return $this->getEncryptionService()->decrypt($value);
+        $decrypted = $this->getEncryptionService()->decrypt($value);
+        
+        // Check if the decrypted value is still encrypted (double encryption scenario)
+        if (is_string($decrypted) && $this->isValueEncrypted($decrypted)) {
+            try {
+                return $this->getEncryptionService()->decrypt($decrypted);
+            } catch (\Exception $e) {
+                // If second decryption fails, return the first decryption result
+                return $decrypted;
+            }
+        }
+        
+        return $decrypted;
     }
     
     /**
@@ -155,8 +170,7 @@ trait Encryptable
     
     /**
      * Dynamically set attributes.
-     * Ensures attributes are correctly marked for encryption when set through
-     * notification or other dynamic methods.
+     * Ensures attributes are stored as plain text when set, to be encrypted on save.
      *
      * @param  string  $key
      * @param  mixed  $value
@@ -169,18 +183,9 @@ trait Encryptable
             return parent::__set($key, $value);
         }
         
-        // Set the attribute as normal
+        // Set the attribute as normal - do NOT encrypt here
+        // Encryption should only happen on save via the saving event
         parent::__set($key, $value);
-        
-        // If the attribute should be encrypted, make sure it's encrypted
-        $encryptableAttributes = $this->getEncryptableAttributes();
-        
-        if (in_array($key, $encryptableAttributes) && isset($this->attributes[$key]) && !empty($value)) {
-            // Don't double-encrypt - only encrypt if the value is not already encrypted
-            if (!$this->isValueEncrypted($value)) {
-                $this->attributes[$key] = $this->encryptValue($value);
-            }
-        }
     }
     
     /**
