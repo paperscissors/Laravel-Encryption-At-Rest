@@ -434,7 +434,7 @@ class EncryptableTest extends TestCase
         $this->assertNotEquals($originalValue, $rawData->address);
     }
 
-    public function testSingleEncryptionOnSaveOnly()
+    public function testImmediateEncryptionOnSet()
     {
         // Create a test table
         $this->app['db']->connection()->getSchemaBuilder()->create('test_models', function ($table) {
@@ -447,34 +447,39 @@ class EncryptableTest extends TestCase
         // Create a new model
         $model = new TestEncryptableModel();
         
-        // Set values - these should NOT be encrypted yet
+        // Set values - these should be encrypted IMMEDIATELY
         $model->email = 'test@example.com';
         $model->phone = '123-456-7890';
         
-        // Check that the values are still plain text before save
+        // Check that accessing the values returns the original plain text
         $this->assertEquals('test@example.com', $model->email);
         $this->assertEquals('123-456-7890', $model->phone);
         
-        // Check the raw attributes are also plain text
-        $this->assertEquals('test@example.com', $model->getAttributes()['email']);
-        $this->assertEquals('123-456-7890', $model->getAttributes()['phone']);
+        // Check that the raw attributes are actually encrypted
+        $rawAttributes = $model->getAttributes();
+        $this->assertNotEquals('test@example.com', $rawAttributes['email']);
+        $this->assertNotEquals('123-456-7890', $rawAttributes['phone']);
         
-        // Now save the model - this should encrypt the values
+        // Verify they are detectable as encrypted
+        $reflection = new \ReflectionClass($model);
+        $method = $reflection->getMethod('isValueEncrypted');
+        $method->setAccessible(true);
+        $this->assertTrue($method->invokeArgs($model, [$rawAttributes['email']]));
+        $this->assertTrue($method->invokeArgs($model, [$rawAttributes['phone']]));
+        
+        // Now save the model - values should already be encrypted, no additional encryption
         $model->save();
         
         // After save, when accessed, they should still return the original values
         $this->assertEquals('test@example.com', $model->email);
         $this->assertEquals('123-456-7890', $model->phone);
         
-        // But the raw database should be encrypted
+        // Database should contain the same encrypted values as in memory
         $rawData = $this->app['db']->connection()->table('test_models')->where('id', $model->id)->first();
         $this->assertNotEquals('test@example.com', $rawData->email);
         $this->assertNotEquals('123-456-7890', $rawData->phone);
         
-        // And they should be detectable as encrypted
-        $reflection = new \ReflectionClass($model);
-        $method = $reflection->getMethod('isValueEncrypted');
-        $method->setAccessible(true);
+        // Values should still be encrypted in the same way
         $this->assertTrue($method->invokeArgs($model, [$rawData->email]));
         $this->assertTrue($method->invokeArgs($model, [$rawData->phone]));
         
@@ -482,6 +487,59 @@ class EncryptableTest extends TestCase
         $freshModel = TestEncryptableModel::find($model->id);
         $this->assertEquals('test@example.com', $freshModel->email);
         $this->assertEquals('123-456-7890', $freshModel->phone);
+    }
+
+    public function testNoDoubleEncryptionOnMultipleSaves()
+    {
+        // Create a test table
+        $this->app['db']->connection()->getSchemaBuilder()->create('test_models', function ($table) {
+            $table->increments('id');
+            $table->text('email')->nullable();
+            $table->text('phone')->nullable();  
+            $table->timestamps();
+        });
+
+        // Create and save a model
+        $model = new TestEncryptableModel();
+        $model->email = 'test@example.com';
+        $model->phone = '123-456-7890';
+        $model->save();
+
+        // Get the encrypted values after first save
+        $firstRawData = $this->app['db']->connection()->table('test_models')->where('id', $model->id)->first();
+        $firstEncryptedEmail = $firstRawData->email;
+        $firstEncryptedPhone = $firstRawData->phone;
+
+        // Access the values (which should decrypt them for display)
+        $this->assertEquals('test@example.com', $model->email);
+        $this->assertEquals('123-456-7890', $model->phone);
+
+        // Save again - this should NOT cause re-encryption
+        $model->save();
+
+        // Get the encrypted values after second save
+        $secondRawData = $this->app['db']->connection()->table('test_models')->where('id', $model->id)->first();
+        
+        // The encrypted values should be identical (no double encryption)
+        $this->assertEquals($firstEncryptedEmail, $secondRawData->email);
+        $this->assertEquals($firstEncryptedPhone, $secondRawData->phone);
+
+        // Values should still decrypt correctly
+        $this->assertEquals('test@example.com', $model->email);
+        $this->assertEquals('123-456-7890', $model->phone);
+
+        // Try setting the same values again and saving
+        $model->email = 'test@example.com';
+        $model->phone = '123-456-7890';
+        $model->save();
+
+        // Should still be properly encrypted and decryptable
+        $thirdRawData = $this->app['db']->connection()->table('test_models')->where('id', $model->id)->first();
+        $this->assertNotEquals('test@example.com', $thirdRawData->email);
+        $this->assertNotEquals('123-456-7890', $thirdRawData->phone);
+        
+        $this->assertEquals('test@example.com', $model->email);
+        $this->assertEquals('123-456-7890', $model->phone);
     }
 }
 
