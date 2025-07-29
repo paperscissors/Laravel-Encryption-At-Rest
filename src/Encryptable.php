@@ -131,26 +131,16 @@ trait Encryptable
         $encryptableAttributes = $this->getEncryptableAttributes();
         
         if (in_array($key, $encryptableAttributes) && isset($this->attributes[$key])) {
-            try {
-                // If the attribute appears to be encrypted, decrypt it on-the-fly
-                if (is_string($this->attributes[$key]) && !empty($this->attributes[$key])) {
-                    // Attempt to detect if it's already decrypted to avoid double decryption
+            if (is_string($this->attributes[$key]) && !empty($this->attributes[$key])) {
+                // Check if the value appears to be encrypted
+                if ($this->isValueEncrypted($this->attributes[$key])) {
                     try {
-                        // If this doesn't throw an exception, it's likely already encrypted
-                        // and we should decrypt it before returning
-                        $encrypted = $this->getEncryptionService()->encrypt('test_encryption');
-                        $this->getEncryptionService()->decrypt($encrypted);
-                        
-                        // If it looks like a JSON payload, it's probably encrypted
-                        if (preg_match('/^{.*}$/', $this->attributes[$key])) {
-                            return $this->decryptValue($this->attributes[$key]);
-                        }
+                        return $this->decryptValue($this->attributes[$key]);
                     } catch (\Exception $e) {
-                        // If we catch an exception here, it's probably already decrypted
+                        // If decryption fails, return the original value
+                        return $this->attributes[$key];
                     }
                 }
-            } catch (\Exception $e) {
-                // If decryption fails, return the original value
             }
         }
         
@@ -181,12 +171,8 @@ trait Encryptable
         $encryptableAttributes = $this->getEncryptableAttributes();
         
         if (in_array($key, $encryptableAttributes) && isset($this->attributes[$key]) && !empty($value)) {
-            // Don't double-encrypt
-            try {
-                // Try to decrypt the value - if it fails, it needs to be encrypted
-                $this->getEncryptionService()->decrypt($value);
-            } catch (\Exception $e) {
-                // If decryption failed, encrypt the value
+            // Don't double-encrypt - only encrypt if the value is not already encrypted
+            if (!$this->isValueEncrypted($value)) {
                 $this->attributes[$key] = $this->encryptValue($value);
             }
         }
@@ -233,5 +219,54 @@ trait Encryptable
         }
         
         return parent::getAttribute($key);
+    }
+    
+    /**
+     * Check if a value appears to be encrypted.
+     * Detects both Laravel standard encryption (AES-256-CBC) and compact encryption formats.
+     *
+     * @param  string  $value
+     * @return bool
+     */
+    protected function isValueEncrypted($value)
+    {
+        if (!is_string($value) || empty($value)) {
+            return false;
+        }
+        
+        // Check for compact encryption format (starts with 'c:')
+        if (strpos($value, 'c:') === 0) {
+            return true;
+        }
+        
+        // Check for Laravel standard encryption format (base64 encoded JSON with iv, value, mac)
+        // Laravel AES-256-CBC encryption produces base64 strings that decode to JSON
+        if (strlen($value) > 50 && base64_decode($value, true) !== false) {
+            $decoded = base64_decode($value, true);
+            if ($decoded !== false) {
+                $json = json_decode($decoded, true);
+                // Laravel encryption has 'iv', 'value', and 'mac' keys
+                // May also have additional keys like 'tag' in newer versions
+                if (is_array($json) && 
+                    isset($json['iv'], $json['value'], $json['mac'])) {
+                    return true;
+                }
+            }
+        }
+        
+        // Additional pattern check for Laravel encryption that starts with 'eyJ'
+        // (base64 encoding of '{"' which is common for Laravel encryption JSON)
+        if (preg_match('/^eyJ[A-Za-z0-9+\/]+=*$/', $value)) {
+            $decoded = base64_decode($value, true);
+            if ($decoded !== false) {
+                $json = json_decode($decoded, true);
+                if (is_array($json) && 
+                    isset($json['iv'], $json['value'], $json['mac'])) {
+                    return true;
+                }
+            }
+        }
+        
+        return false;
     }
 }
