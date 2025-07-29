@@ -282,6 +282,115 @@ class EncryptableTest extends TestCase
         $this->assertEquals('123-456-7890', $array['phone']);
         $this->assertEquals('123 Main St', $array['address']);
     }
+
+    public function testCompactDecryptionFromRawDatabase()
+    {
+        // Create a test table
+        $this->app['db']->connection()->getSchemaBuilder()->create('test_models', function ($table) {
+            $table->increments('id');
+            $table->text('address')->nullable();
+            $table->timestamps();
+        });
+
+        $encryptionService = $this->app->make(EncryptionService::class);
+        
+        // Use reflection to access compact encryption
+        $reflection = new \ReflectionClass($encryptionService);
+        $compactEncryptMethod = $reflection->getMethod('compactEncrypt');
+        $compactEncryptMethod->setAccessible(true);
+
+        // Create a compact encrypted value similar to the user's issue
+        $originalValue = '123 Main Street';
+        $compactEncrypted = $compactEncryptMethod->invokeArgs($encryptionService, [$originalValue]);
+        
+        // Manually insert into database with compact encryption
+        $id = $this->app['db']->connection()->table('test_models')->insertGetId([
+            'address' => $compactEncrypted,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        // Retrieve using Eloquent - this should trigger decryption
+        $model = TestEncryptableModel::find($id);
+        
+        // Check that the value is properly decrypted when accessed
+        $this->assertEquals($originalValue, $model->address);
+        
+        // Check that accessing via __get also works
+        $this->assertEquals($originalValue, $model->__get('address'));
+        
+        // Check that toArray() also works
+        $array = $model->toArray();
+        $this->assertEquals($originalValue, $array['address']);
+
+        // Verify the raw database value is still compact encrypted
+        $rawData = $this->app['db']->connection()->table('test_models')->where('id', $id)->first();
+        $this->assertTrue(strpos($rawData->address, 'c:') === 0);
+        $this->assertNotEquals($originalValue, $rawData->address);
+    }
+
+    public function testDecryptionWorksForRelationshipLoadedModels()
+    {
+        // Create tables for user and addresses
+        $this->app['db']->connection()->getSchemaBuilder()->create('users', function ($table) {
+            $table->increments('id');
+            $table->string('name');
+            $table->timestamps();
+        });
+
+        $this->app['db']->connection()->getSchemaBuilder()->create('user_addresses', function ($table) {
+            $table->increments('id');
+            $table->integer('user_id');
+            $table->text('street_1')->nullable();
+            $table->text('street_2')->nullable();
+            $table->timestamps();
+        });
+
+        $encryptionService = $this->app->make(EncryptionService::class);
+        $reflection = new \ReflectionClass($encryptionService);
+        $compactEncryptMethod = $reflection->getMethod('compactEncrypt');
+        $compactEncryptMethod->setAccessible(true);
+
+        // Create test data
+        $userId = $this->app['db']->connection()->table('users')->insertGetId([
+            'name' => 'Test User',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        // Insert address with compact encrypted street_1 and street_2
+        $street1Encrypted = $compactEncryptMethod->invokeArgs($encryptionService, ['123 Main Street']);
+        $street2Encrypted = $encryptionService->encrypt('Apt 4B'); // Regular encryption
+
+        $addressId = $this->app['db']->connection()->table('user_addresses')->insertGetId([
+            'user_id' => $userId,
+            'street_1' => $street1Encrypted,
+            'street_2' => $street2Encrypted,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        // Now simulate loading through a collection/relationship query
+        // (which doesn't trigger the retrieved event)
+        $addresses = $this->app['db']->connection()->table('user_addresses')
+            ->where('user_id', $userId)
+            ->get();
+
+        // Create model instances manually from the raw data (simulating relationship loading)
+        $addressData = $addresses->first();
+        $address = new TestAddressModel();
+        $address->setRawAttributes((array) $addressData);
+        $address->exists = true;
+
+        // Test that decryption works even when retrieved event didn't fire
+        $this->assertEquals('123 Main Street', $address->street_1);
+        $this->assertEquals('Apt 4B', $address->street_2);
+
+        // Test toArray() also works
+        $array = $address->toArray();
+        $this->assertEquals('123 Main Street', $array['street_1']);
+        $this->assertEquals('Apt 4B', $array['street_2']);
+    }
 }
 
 class TestEncryptableModel extends Model
@@ -292,4 +401,14 @@ class TestEncryptableModel extends Model
     protected $guarded = [];
     
     protected $encryptable = ['email', 'phone', 'address', 'company'];
+}
+
+class TestAddressModel extends Model
+{
+    use Encryptable;
+    
+    protected $table = 'user_addresses';
+    protected $guarded = [];
+    
+    protected $encryptable = ['street_1', 'street_2'];
 }

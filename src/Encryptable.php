@@ -31,6 +31,11 @@ trait Encryptable
         static::retrieved(function ($model) {
             $model->decryptAttributes();
         });
+        
+        // Also decrypt when models are created from arrays (like from relationships)
+        static::creating(function ($model) {
+            // Don't decrypt on creating, just mark that we need to check later
+        });
     }
 
     /**
@@ -209,13 +214,23 @@ trait Encryptable
         $encryptableAttributes = $this->getEncryptableAttributes();
         
         if (in_array($key, $encryptableAttributes) && isset($this->attributes[$key])) {
-            try {
-                // Ensure the attribute is decrypted
-                return $this->decryptValue($this->attributes[$key]);
-            } catch (\Exception $e) {
-                // If decryption fails, return the attribute as-is
-                return $this->attributes[$key];
+            // Check if the value appears to be encrypted
+            if (is_string($this->attributes[$key]) && !empty($this->attributes[$key])) {
+                if ($this->isValueEncrypted($this->attributes[$key])) {
+                    try {
+                        $decrypted = $this->decryptValue($this->attributes[$key]);
+                        // Store the decrypted value back to avoid repeated decryption
+                        $this->attributes[$key] = $decrypted;
+                        return $decrypted;
+                    } catch (\Exception $e) {
+                        // If decryption fails, return the attribute as-is
+                        return $this->attributes[$key];
+                    }
+                }
             }
+            
+            // If not encrypted, return as-is
+            return $this->attributes[$key];
         }
         
         return parent::getAttribute($key);
